@@ -4,12 +4,14 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Platform } from '@ionic/angular';
 import { UserPhoto } from '../interfaces/user-photo';
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 @Injectable({
   providedIn: 'root'
 })
 export class PhotoService {
   public photos: UserPhoto[] = [];
+  private PHOTO_STORAGE: string = 'photos';
   private platform: Platform;
   constructor(platform: Platform) {
     this.platform = platform;
@@ -22,11 +24,28 @@ export class PhotoService {
     });
     const savedImageFile = await this.savePicture(capturedPhoto);
     this.photos.unshift(savedImageFile);
+    Preferences.set({
+      key: this.PHOTO_STORAGE,
+      value: JSON.stringify(this.photos),
+    });
     /*
     this.photos.unshift({
       filepath: "soon...",
       webviewPath: capturedPhoto.webPath!
     });*/
+  }
+  public async loadSaved() {
+    const { value } = await Preferences.get({ key: this.PHOTO_STORAGE });
+    this.photos = (value ? JSON.parse(value) : []) as UserPhoto[];
+    if (!this.platform.is('hybrid')) {
+      for (let photo of this.photos) {
+        const readFile = await Filesystem.readFile({
+          path: photo.filepath,
+          directory: Directory.Data
+        });
+        photo.webviewPath = `data:image/jpeg;base64,${readFile.data}`;
+      }
+    }
   }
   private async savePicture(photo: Photo) {
     const base64Data = await this.readAsBase64(photo);
